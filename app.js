@@ -1657,12 +1657,10 @@ const FLAG_LABELS={
 const PLAN_CHECKLIST=[
   'Tener el DOL claro e ir solo a favor del DOL (Innegociable)',
   'SL donde se invalide el trade',
-  'Tener rangos LTF (8h-2h) a favor',
+  'Vela de 12h ha cerrado dentro',
   'No tener rango contrario importante cerca',
   'Tendencia a favor',
-  '1 SL por cuenta por día',
-  'Poner BE solo al llegar al primer objetivo o más (nunca antes)',
-  'Solo puedo cerrar antes si 2/3 pares han llegado ya al DOL o a un objetivo importante'
+  'Poner BE solo al llegar al 3r cuadrante (nunca antes)'
 ];
 const SETUPS=['Setup A','Setup B','Setup C','Pares','Otro'];
 const SYMBOLS=['MNQ','MES','MYM','M2K','MGC','MCL','M6E','NQ','ES','YM','GC','CL','EURAUD','Otro'];
@@ -1807,43 +1805,11 @@ function tradeModal(t){
       <div class="plan-count" id="f_planCount"></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>Fecha</label><input type="date" id="f_date" value="${e.date||todayISO()}"></div>
-      <div class="field"><label>Símbolo</label><select id="f_symbol">${SYMBOLS.map(s=>`<option ${(e.symbol||'MNQ')===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Fecha inicio <span class="hint">apertura del trade</span></label><input type="date" id="f_dateStart" value="${e.dateStart||e.date||todayISO()}"></div>
+      <div class="field"><label>Fecha fin <span class="hint">cierre del trade</span></label><input type="date" id="f_dateEnd" value="${e.dateEnd||''}"></div>
     </div>
-    <div class="field-row">
-      <div class="field"><label>Setup</label><select id="f_setup">${SETUPS.map(s=>`<option ${e.setup===s?'selected':''}>${s}</option>`).join('')}</select></div>
-      <div class="field"><label>Sesión</label><select id="f_session">${SESSIONS.map(s=>`<option ${e.session===s?'selected':''}>${s}</option>`).join('')}</select></div>
-    </div>
-    <div class="field"><label>¿Dónde empezó el movimiento? <span class="hint">estructura CRT</span></label>
-      <select id="f_moveType" onchange="toggleMoveOther()">
-        <option value="" ${!e.moveType?'selected':''}>— no registrado —</option>
-        ${Object.entries(MOVE_TYPES).map(([k,l])=>`<option value="${k}" ${e.moveType===k?'selected':''}>${l}</option>`).join('')}
-      </select>
-      <input type="text" id="f_moveOther" placeholder="Especifica qué momento..." value="${e.moveOther||''}" style="margin-top:8px;display:none">
-    </div>
-    <div class="field"><label>¿Hubo entrada por SMT? <span class="hint">RS Scalp — si apareció el señal, entraras o no</span></label>
-      <select id="f_smt" onchange="toggleSmt()">
-        <option value="" ${!e.smt?'selected':''}>— no hubo / no registrado —</option>
-        <option value="yes" ${e.smt==='yes'?'selected':''}>Sí, apareció entrada por SMT</option>
-      </select>
-    </div>
-    <div id="f_smtDetails" style="display:none">
-      <div class="field-row">
-        <div class="field"><label>Resultado del SMT</label>
-          <select id="f_smtResult">
-            <option value="tp" ${e.smtResult==='tp'?'selected':''}>TP (habría ganado)</option>
-            <option value="sl" ${e.smtResult==='sl'?'selected':''}>SL (habría perdido)</option>
-            <option value="be" ${e.smtResult==='be'?'selected':''}>BE</option>
-          </select>
-        </div>
-        <div class="field"><label>Timing respecto apertura NY</label>
-          <select id="f_smtTiming">
-            <option value="before" ${e.smtTiming==='before'?'selected':''}>Antes de apertura (&lt;9:30)</option>
-            <option value="open" ${e.smtTiming==='open'?'selected':''}>En apertura (9:30-10:00)</option>
-            <option value="after" ${e.smtTiming==='after'?'selected':''}>Después (&gt;10:00)</option>
-          </select>
-        </div>
-      </div>
+    <div class="field"><label>Símbolo <span class="hint">par de divisas</span></label>
+      <input type="text" id="f_symbol" value="${e.symbol||''}" placeholder="ex. EURUSD, GBPJPY..." style="text-transform:uppercase">
     </div>
     <div class="field-row">
       <div class="field"><label>Cuenta</label><select id="f_account" onchange="onAccountChange()"><option value="">— sin asignar —</option>${DB.accounts.map(a=>{
@@ -1929,8 +1895,6 @@ function tradeModal(t){
   $$('#f_plan input[type=checkbox]').forEach(c=>c.addEventListener('change',updatePlanCount));
   updatePlanCount();
   onRealizedRChange();
-  toggleMoveOther();
-  toggleSmt();
 }
 
 // Deduce el resultado a partir del R realizado (single source of truth)
@@ -2101,15 +2065,10 @@ function saveTrade(id){
   const existing=id?DB.trades.find(x=>x.id===id):null;
   const t={
     id:id||uid(),
-    date:$('#f_date').value,
+    dateStart:$('#f_dateStart').value,
+    dateEnd:$('#f_dateEnd').value,
+    date:$('#f_dateStart').value, // compat: 'date' = fecha inicio (usada por calendario/orden)
     symbol:$('#f_symbol').value.trim().toUpperCase(),
-    setup:$('#f_setup').value,
-    session:$('#f_session').value,
-    moveType:$('#f_moveType').value,
-    moveOther:$('#f_moveType').value==='other'?$('#f_moveOther').value.trim():'',
-    smt:$('#f_smt').value,
-    smtResult:$('#f_smt').value==='yes'?$('#f_smtResult').value:'',
-    smtTiming:$('#f_smt').value==='yes'?$('#f_smtTiming').value:'',
     account:$('#f_account').value,
     phase: $('#f_phase').value || (()=>{ const acc=DB.accounts.find(a=>a.name===$('#f_account').value); return acc? (acc.phase==='Funded'?'funded':'eval') : ''; })(),
     plannedR:parseFloat($('#f_plannedR').value)||0,
